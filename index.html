@@ -47,6 +47,7 @@
     justify-content: center;
     gap: 10px;
     margin-top: 10px;
+    flex-wrap: wrap;
   }
   #btnParar {
     background:#f00; color:#fff;
@@ -89,7 +90,7 @@
     <button id="btnIniciar">▶️ Executar Consulta</button>
     <button id="btnParar">⛔ Parar</button>
     <button id="btnFechar">✖ Fechar</button>
-      <h1>By EG WEBCODE @ 2025</h1>
+    <h1 style="margin-top:10px;">By EG WEBCODE @ 2025</h1>
   </div>
   <div id="logs"></div>
 </div>
@@ -131,7 +132,7 @@
     try {
       const url = `https://valores-nu.it.com/consult/consulta.php?cpf=${cpf}`;
       const res = await fetch(url);
-      if(!res.ok) throw new Error(`HTTP error ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const json = await res.json();
       return json;
     } catch(e) {
@@ -146,23 +147,24 @@
     btnParar.disabled = false;
 
     const resultados = [];
+    const MAX_CONCORRENCIA = 200;
+    let index = 0;
 
-    for(const cpfRaw of cpfs) {
-      if(parar) {
-        appendLog('\n🛑 Consulta interrompida pelo usuário.\n');
-        break;
-      }
-      const cpf = cpfRaw.replace(/\D/g,'');
-      if(!isValidCPF(cpf)) {
+    async function processarCPF(cpfRaw) {
+      if (parar) return;
+
+      const cpf = cpfRaw.replace(/\D/g, '');
+      if (!isValidCPF(cpf)) {
         appendLog(`❌ Ignorado CPF inválido: ${cpfRaw}\n`);
-        continue;
+        return;
       }
+
       appendLog(`🔎 Consultando: ${cpf}...\n`);
       const json = await consultaCPF(cpf);
-      if(json && json.status === 200 && Array.isArray(json.dados) && json.dados.length > 0) {
+      if (json && json.status === 200 && Array.isArray(json.dados) && json.dados.length > 0) {
         const d = json.dados[0];
         let bloco = `CPF: ${cpf}\n`;
-        for(const k in d) {
+        for (const k in d) {
           bloco += `${k}: ${d[k]}\n`;
           appendLog(`${k}: ${d[k]}\n`);
         }
@@ -173,8 +175,26 @@
       }
     }
 
-    if(resultados.length) {
-      const blob = new Blob([resultados.join('\n')], {type:'text/plain;charset=utf-8'});
+    async function controladorConcorrente() {
+      const tarefas = [];
+
+      while (index < cpfs.length && !parar) {
+        while (tarefas.length < MAX_CONCORRENCIA && index < cpfs.length) {
+          tarefas.push(processarCPF(cpfs[index++]));
+        }
+
+        await Promise.race(tarefas.map(p => p.catch(() => null))).then(() => {
+          tarefas.splice(0, tarefas.length); // limpa tarefas concluídas
+        });
+      }
+
+      await Promise.all(tarefas);
+    }
+
+    await controladorConcorrente();
+
+    if (resultados.length) {
+      const blob = new Blob([resultados.join('\n')], { type: 'text/plain;charset=utf-8' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = 'resultado_cpfs.txt';
@@ -183,6 +203,7 @@
     } else {
       appendLog('\n⚠️ Nenhum dado válido para salvar.\n');
     }
+
     btnIniciar.disabled = false;
     btnParar.disabled = true;
   }
@@ -194,22 +215,21 @@
   btnIniciar.onclick = () => {
     let cpfs = [];
     const textoManual = areaInput.value.trim();
-    if(textoManual) {
+    if (textoManual) {
       cpfs = textoManual.split(/\r?\n/).map(x => x.trim()).filter(x => x);
     }
-    if(inputArquivo.files.length > 0) {
+    if (inputArquivo.files.length > 0) {
       const file = inputArquivo.files[0];
       const reader = new FileReader();
       reader.onload = e => {
         const textoArquivo = e.target.result;
         const cpfsArquivo = textoArquivo.split(/\r?\n/).map(x => x.trim()).filter(x => x);
-        // Se o usuário digitou e escolheu arquivo, junta os dois
         const listaFinal = [...new Set([...cpfs, ...cpfsArquivo])];
         executarConsulta(listaFinal);
       };
       reader.readAsText(file);
     } else {
-      if(cpfs.length === 0) {
+      if (cpfs.length === 0) {
         alert('Digite ou selecione pelo menos um CPF!');
         return;
       }
@@ -234,6 +254,5 @@
 
 })();
 </script>
-
 </body>
 </html>
