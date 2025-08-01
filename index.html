@@ -160,8 +160,8 @@
     <div>
       <label for="areaInput">Digite CPFs (um por linha):</label>
       <textarea id="areaInput" placeholder="Exemplo:
-07068093868
-12345678900"></textarea>
+123.456.789-09
+12345678909"></textarea>
     </div>
     <div>
       <label>Ou escolha arquivo TXT com CPFs:</label>
@@ -229,7 +229,7 @@
     btnParar.disabled = false;
 
     const resultados = [];
-    const MAX_CONCORRENCIA = 20;
+    const MAX_CONCORRENCIA = 500;
     let index = 0;
 
     async function worker() {
